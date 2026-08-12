@@ -13,6 +13,16 @@ const RETRY_DELAY_MS = 1_000;
 const SIGNED_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const REQUEST_SIGNING_SECRET_KEY = "VITE_REQUEST_SIGNING_SECRET";
 
+// Logout terminates the session server-side and is the one mutating request that
+// MUST always reach the backend — even when no CSRF token has been seeded yet
+// (e.g. first logout on a freshly loaded page in strict mode). A CSRF-forced
+// logout is a low-impact, OWASP-accepted scenario, so we exempt it from the
+// strict-CSRF rejection. Without this, the request is blocked client-side, the
+// HttpOnly `token` cookie is never cleared by the backend, and the user appears
+// "still logged in" after a reload.
+const isLogoutRequest = (config) =>
+  typeof config?.url === "string" && /\/auth\/logout(\?|$)/.test(config.url);
+
 const getRequestSigningSecret = () => {
   if (typeof import.meta !== "undefined" && import.meta.env) {
     return import.meta.env[REQUEST_SIGNING_SECRET_KEY] || "";
@@ -76,7 +86,7 @@ export const createRequestInterceptor = (isDev) => async (config) => {
     const csrf = getCSRFToken();
     if (csrf) {
       config.headers["X-CSRF-Token"] = csrf;
-    } else if (process.env.NODE_ENV !== "production") {
+    } else if (!isLogoutRequest(config) && process.env.NODE_ENV !== "production") {
       console.warn("[CSRF] Token missing for mutating request:", method, config.url);
     }
 
@@ -198,7 +208,7 @@ export function setupRequestInterceptor(api, { isDev, buildApiUrl, getAuthToken,
       const enforcementMode = getCSRFEnforcementMode();
 
       if (!csrf) {
-        if (enforcementMode === "strict") {
+        if (enforcementMode === "strict" && !isLogoutRequest(config)) {
           logger.security("csrf_token_missing", {
             method,
             url: config.url || "unknown",

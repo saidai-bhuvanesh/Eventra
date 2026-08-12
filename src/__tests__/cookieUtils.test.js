@@ -380,12 +380,12 @@ describe("cookieUtils", () => {
     });
 
     it("should delete auth token with secureVariants", () => {
-      deleteCookie("auth_token", {
+      deleteCookie("token", {
         path: "/",
-        secure: true,
+        secureVariants: true,
         sameSite: "Strict",
       });
-      expect(document.cookie).toContain("auth_token=");
+      expect(document.cookie).toContain("token=");
       expect(document.cookie).toContain("Max-Age=0");
     });
   });

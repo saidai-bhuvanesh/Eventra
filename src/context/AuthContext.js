@@ -140,11 +140,11 @@ export const AuthProvider = ({ children }) => {
     setAuthToken(null);
     setRefreshToken(null);
 
-    // Invalidate token cookie (must match the name used in persistSession)
-    deleteCookie("token", {
-      path: "/",
-      secureVariants: true,
-    });
+    // The auth `token` cookie is set HttpOnly by the backend (see AuthCookieHelper),
+    // so document.cookie CANNOT remove it from JS. We rely on the backend
+    // /auth/logout response's Set-Cookie to expire it. We only clear the
+    // JS-accessible CSRF / refresh companion cookies here.
+    deleteCookie("XSRF-TOKEN", { path: "/", secureVariants: true });
 
     // Clear user metadata from secure/local storage manager
     syncSecureStorage.removeItem("user");
@@ -382,11 +382,10 @@ export const AuthProvider = ({ children }) => {
         return true;
       } catch (error) {
         if (!isMountedRef.current) return false;
-        // Fix (Issue #8646):
-        deleteCookie("token", {
-          path: "/",
-          secureVariants: true,
-        });
+        // The HttpOnly `token` cookie can't be removed from JS; on a failed
+        // login the backend never set it. Just clear the JS-accessible CSRF
+        // companion cookie so a stale token from a previous session is gone.
+        deleteCookie("XSRF-TOKEN", { path: "/", secureVariants: true });
 
         const status = error?.status || error?.response?.status;
         // Re-throw server errors so Login.js catch can show the correct message
@@ -420,10 +419,9 @@ export const AuthProvider = ({ children }) => {
         return true;
       } catch (error) {
         if (!isMountedRef.current) return false;
-        deleteCookie("token", {
-          path: "/",
-          secureVariants: true,
-        });
+        // HttpOnly `token` cookie can't be removed from JS; only clear the
+        // JS-accessible CSRF companion cookie.
+        deleteCookie("XSRF-TOKEN", { path: "/", secureVariants: true });
         setAuthRequest({
           loading: false,
           error: getAuthErrorMessage(error, "Google login failed. Please try again."),
